@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Upload, Download, FileText, Loader2, ChevronDown, Cpu } from 'lucide-react';
+import { Upload, Download, FileText, Loader2, Cpu } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
@@ -9,16 +9,16 @@ const ZenCVLayout = () => {
   const [jobDescription, setJobDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [customizedResume, setCustomizedResume] = useState(null);
+  const [customizedResumeBlob, setCustomizedResumeBlob] = useState(null);
   const [selectedModel, setSelectedModel] = useState('aws-bedrock');
   const [error, setError] = useState(null);
 
   const aiModels = [
-    { id: 'aws-bedrock', name: 'AWS Bedrock', description: 'Claude v3 Sonnet' },
-    { id: 'llama', name: 'Llama 2', description: '70B Chat' },
-    { id: 'google-ai', name: 'Google AI Studio', description: 'Gemini Pro' },
-    { id: 'openai', name: 'OpenAI', description: 'GPT-4' },
-    { id: 'anthropic', name: 'Anthropic', description: 'Claude v3 Opus' },
+    { id: 'aws-bedrock', name: 'AWS Bedrock', description: 'Claude v3 Sonnet' , disabled: true},
+    { id: 'llama', name: 'Llama 2', description: '70B Chat' , disabled: true},
+    { id: 'google', name: 'Google AI Studio', description: 'Gemini Pro' , disabled: false},
+    { id: 'openai', name: 'OpenAI', description: 'GPT-4' , disabled: true},
+    { id: 'anthropic', name: 'Anthropic', description: 'Claude v3 Opus' , disabled: true},
   ];
 
   const handleFileUpload = (event) => {
@@ -39,30 +39,30 @@ const ZenCVLayout = () => {
     try {
       setIsLoading(true);
       setError(null);
-
+  
       if (!uploadedFile || !jobDescription.trim()) {
         setError('Please provide both resume and job description');
         return;
       }
-
+  
       const formData = new FormData();
-      formData.append('file', uploadedFile);
-      formData.append('jobDescription', jobDescription);
-      formData.append('model', selectedModel);
-
-      // Replace with your API endpoint
-      const response = await fetch('YOUR_API_ENDPOINT', {
+      formData.append('resume_file', uploadedFile);
+      formData.append('job_description', jobDescription);
+      formData.append('model_name', selectedModel);
+  
+      const response = await fetch('http://localhost:8000/api/customize-resume', {
         method: 'POST',
         body: formData,
       });
-
+  
       if (!response.ok) {
         throw new Error(`Error: ${response.status}`);
       }
-
-      const data = await response.json();
-      setCustomizedResume(data.result);
-
+  
+      // Get the blob from the response
+      const blob = await response.blob();
+      setCustomizedResumeBlob(blob);
+  
     } catch (err) {
       console.error('Error during customization:', err);
       setError(err.message || 'Failed to customize resume. Please try again.');
@@ -71,7 +71,19 @@ const ZenCVLayout = () => {
     }
   };
 
-  // The entire JSX remains exactly the same as your original file
+  const handleDownload = () => {
+    if (customizedResumeBlob) {
+      const url = window.URL.createObjectURL(customizedResumeBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customized_resume_${new Date().toISOString().split('T')[0]}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }
+  };
+ 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black to-gray-900">
       {/* Header */}
@@ -106,10 +118,12 @@ const ZenCVLayout = () => {
                     key={model.id}
                     onClick={() => setSelectedModel(model.id)}
                     className={`p-4 rounded-lg border transition-all duration-200 
-                              flex flex-col items-center justify-center text-center gap-2
-                              ${selectedModel === model.id 
-                                ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/20' 
-                                : 'bg-black/30 border-gray-800 hover:border-purple-500/50'}`}
+                      flex flex-col items-center justify-center text-center gap-2
+                      ${selectedModel === model.id 
+                      ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/20' 
+                      : 'bg-black/30 border-gray-800 hover:border-purple-500/50'}
+                      ${model.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={model.disabled}
                   >
                     <span className={`font-medium ${selectedModel === model.id ? 'text-purple-300' : 'text-gray-300'}`}>
                       {model.name}
@@ -215,7 +229,7 @@ const ZenCVLayout = () => {
             </button>
 
             {/* Download Section */}
-            {customizedResume && (
+            {customizedResumeBlob && (
               <Card className="bg-gray-900/50 border border-gray-800 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-100">
@@ -225,18 +239,7 @@ const ZenCVLayout = () => {
                 </CardHeader>
                 <CardContent>
                   <button
-                    onClick={() => {
-                      // Handle download here
-                      const blob = new Blob([customizedResume], { type: 'application/pdf' });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'customized-resume.pdf';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      window.URL.revokeObjectURL(url);
-                    }}
+                    onClick={handleDownload}
                     className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600
                               text-white rounded-lg font-medium 
                               hover:from-emerald-700 hover:to-teal-700
@@ -250,6 +253,13 @@ const ZenCVLayout = () => {
                   </button>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Error Display */}
+            {error && (
+              <Alert className="bg-red-500/10 border-red-500/20 text-red-200">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
           </div>
         </div>
